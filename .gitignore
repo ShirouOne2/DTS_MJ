@@ -1,0 +1,81 @@
+# ==========================================
+# 🍃 SPRING BOOT (JAVA / MAVEN / GRADLE)
+# ==========================================
+
+# Target & Build outputs
+target/
+build/
+out/
+.gradle/
+/bin/
+
+# Package files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Log files
+*.log
+logs/
+
+# Application configuration & secrets
+# (Never commit production credentials!)
+application-*.properties
+application-*.yml
+.env
+
+# ==========================================
+# 🟢 VUE.JS (NODE / NPM / VITE / WEB_PACK)
+# ==========================================
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Production build outputs
+dist/
+local_dist/
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment local secrets
+.env.local
+.env.*.local
+
+# Editor/OS specific files for frontend tooling
+.eslintcache
+.stylelintcache
+
+# ==========================================
+# 🛠️ IDE, EDITORS, & SYSTEM FILES
+# ==========================================
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# Eclipse
+.metadata/
+.classpath
+.project
+.settings/
+*.launch
+
+# Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+
+# Operating System files
+.DS_Store
+Thumbs.db
