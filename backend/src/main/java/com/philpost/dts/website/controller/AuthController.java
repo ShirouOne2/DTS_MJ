@@ -44,7 +44,11 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout() {
+    public ResponseEntity<Void> logout(Authentication authentication) {
+        // authentication is null if the cookie was already expired; nothing to record then.
+        if (authentication != null) {
+            authService.recordLogout(authentication.getName());
+        }
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, cookie("", 0).toString())
                 .build();

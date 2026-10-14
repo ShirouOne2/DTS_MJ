@@ -9,6 +9,9 @@ import TransmittalView from '../views/TransmittalView.vue'
 import Tracking from '../views/Tracking.vue'
 import FileIntegrityView from '../views/FileIntegrityView.vue'
 import LoginView from '../views/LoginView.vue'
+import DepartmentsView from '../views/admin/DepartmentsView.vue'
+import UsersView from '../views/admin/UsersView.vue'
+import AuditLogView from '../views/admin/AuditLogView.vue'
 import { auth } from '@/stores/auth'
 
 const router = createRouter({
@@ -24,6 +27,24 @@ const router = createRouter({
       path: '/',
       name: 'dashboard',
       component: Dashboard,
+    },
+    {
+      path: '/admin/departments',
+      name: 'departments',
+      component: DepartmentsView,
+      meta: { roles: ['ADMIN'] },
+    },
+    {
+      path: '/admin/users',
+      name: 'users',
+      component: UsersView,
+      meta: { roles: ['ADMIN'] },
+    },
+    {
+      path: '/admin/audit-log',
+      name: 'audit-log',
+      component: AuditLogView,
+      meta: { roles: ['ADMIN'] },
     },
     {
       path: '/document/:id',

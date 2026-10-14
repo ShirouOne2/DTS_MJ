@@ -11,6 +11,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.philpost.dts.website.entity.User;
+import com.philpost.dts.website.repository.UserRepository;
+
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -21,11 +24,12 @@ import jakarta.servlet.http.HttpServletResponse;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
 
-    public JwtAuthFilter(JwtUtil jwtUtil) {
-    this.jwtUtil = jwtUtil;
+    public JwtAuthFilter(JwtUtil jwtUtil, UserRepository userRepository) {
+        this.jwtUtil = jwtUtil;
+        this.userRepository = userRepository;
     }
-
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -44,26 +48,22 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (token != null) {
             try {
                 Claims claims = jwtUtil.validateToken(token);
-                String username = claims.getSubject();
-                String role = claims.get("role", String.class);
-
-                // Spring's hasRole("ADMIN") checks for authority "ROLE_ADMIN",
-                // so we prefix here rather than storing "ROLE_" in the token itself.
-                List<GrantedAuthority> authorities = role != null
-                    ? List.of(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()))
-                    : List.of();
-
-                UsernamePasswordAuthenticationToken auth =
-                        new UsernamePasswordAuthenticationToken(username, null, authorities);
-                auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(auth);
+                // The database is the source of truth: a deactivated user or a changed
+                // role takes effect on the very next request, not when the cookie expires.
+                User user = userRepository.findByUsername(claims.getSubject());
+                if (user != null && Boolean.TRUE.equals(user.getIsActive())) {
+                    List<GrantedAuthority> authorities =
+                            List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
+                    UsernamePasswordAuthenticationToken auth =
+                            new UsernamePasswordAuthenticationToken(user.getUsername(), null, authorities);
+                    auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(auth);
+                }
             } catch (Exception e) {
-                // invalid/expired/malformed token → leave SecurityContext empty,
-                // request proceeds as unauthenticated (permitAll routes still work)
+                // invalid, expired or malformed token: stay unauthenticated
             }
         }
 
         chain.doFilter(request, response);
     }
-
 }

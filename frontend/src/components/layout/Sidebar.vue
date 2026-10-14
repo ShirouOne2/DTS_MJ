@@ -132,6 +132,43 @@
             <div class="my-1 border-t border-gray-100"></div>
 
             <router-link
+              to="/admin/departments"
+              class="flex items-center gap-3 border-l-4 border-transparent py-3 pl-5 text-gray-600 transition-colors duration-200 hover:rounded-r-full hover:bg-blue-50 hover:text-blue-600"
+              :class="activePage === 'departments' ? 'rounded-r-full border-blue-600 bg-blue-50 pr-8 font-semibold text-blue-600' : 'pr-4'"
+            >
+              <BuildingOffice2Icon class="h-5 w-5 shrink-0" />
+              <span
+                class="whitespace-nowrap transition-opacity duration-200"
+                :class="isOpen ? 'opacity-100' : 'opacity-0'"
+                >Departments</span
+              >
+            </router-link>
+
+            <router-link
+              to="/admin/users"
+              class="flex items-center gap-3 border-l-4 border-transparent py-3 pl-5 text-gray-600 transition-colors duration-200 hover:rounded-r-full hover:bg-blue-50 hover:text-blue-600"
+              :class="activePage === 'users' ? 'rounded-r-full border-blue-600 bg-blue-50 pr-8 font-semibold text-blue-600' : 'pr-4'"
+            >
+              <UsersIcon class="h-5 w-5 shrink-0" />
+              <span
+                class="whitespace-nowrap transition-opacity duration-200"
+                :class="isOpen ? 'opacity-100' : 'opacity-0'"
+                >Users</span
+              >
+            </router-link>
+            <router-link
+              to="/admin/audit-log"
+              class="flex items-center gap-3 border-l-4 border-transparent py-3 pl-5 text-gray-600 transition-colors duration-200 hover:rounded-r-full hover:bg-blue-50 hover:text-blue-600"
+              :class="activePage === 'audit-log' ? 'rounded-r-full border-blue-600 bg-blue-50 pr-8 font-semibold text-blue-600' : 'pr-4'"
+            >
+              <ClipboardDocumentListIcon class="h-5 w-5 shrink-0" />
+              <span
+                class="whitespace-nowrap transition-opacity duration-200"
+                :class="isOpen ? 'opacity-100' : 'opacity-0'"
+                >Audit Log</span
+              >
+            </router-link>
+            <router-link
               to="/"
               class="flex items-center gap-3 border-l-4 border-transparent py-3 pl-5 text-gray-600 transition-colors duration-200 hover:rounded-r-full hover:bg-blue-50 hover:text-blue-600"
               :class="activePage === 'analytics' ? 'rounded-r-full border-blue-600 bg-blue-50 pr-8 font-semibold text-blue-600' : 'pr-4'"
@@ -230,7 +267,9 @@ import {
   UserGroupIcon,
   Cog6ToothIcon,
   WrenchScrewdriverIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  BuildingOffice2Icon,
+  UsersIcon
 } from '@heroicons/vue/24/outline'
 
 defineProps({
