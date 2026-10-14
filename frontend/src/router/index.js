@@ -8,10 +8,18 @@ import archived from '../views/ArchivedView.vue'
 import TransmittalView from '../views/TransmittalView.vue'
 import Tracking from '../views/Tracking.vue'
 import FileIntegrityView from '../views/FileIntegrityView.vue'
+import LoginView from '../views/LoginView.vue'
+import { auth } from '@/stores/auth'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    {
+      path: '/login',
+      name: 'login',
+      component: LoginView,
+      meta: { public: true },
+    },
     {
       path: '/',
       name: 'dashboard',
@@ -57,8 +65,25 @@ const router = createRouter({
       path: '/file-integrity',
       name: 'file-integrity',
       component: FileIntegrityView,
+      meta: { roles: ['ADMIN'] },
     },
   ],
+})
+
+router.beforeEach(async (to) => {
+  await auth.init()
+
+  if (to.meta.public) {
+    // Already signed in? Skip the login page.
+    return auth.isLoggedIn && to.name === 'login' ? { name: 'dashboard' } : true
+  }
+  if (!auth.isLoggedIn) {
+    return { name: 'login', query: { redirect: to.fullPath } }
+  }
+  if (to.meta.roles && !to.meta.roles.includes(auth.user.role)) {
+    return { name: 'dashboard' }
+  }
+  return true
 })
 
 export default router

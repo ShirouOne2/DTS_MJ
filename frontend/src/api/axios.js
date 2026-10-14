@@ -1,21 +1,23 @@
-import axios from "axios";
+import axios from 'axios'
 
-// Point this at your Spring Boot backend.
-// Set VITE_API_BASE_URL in a .env file (e.g. .env.local) to override the default.
-// Example .env.local:
-//   VITE_API_BASE_URL=http://localhost:8080/api
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api",
-    headers: {
-        "Content-Type": "application/json",
-    },
-});
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8082/api',
+  headers: { 'Content-Type': 'application/json' },
+  withCredentials: true // sends the HttpOnly jwt cookie
+})
 
-// TODO: once you add authentication, attach the token here, e.g.:
-// api.interceptors.request.use((config) => {
-//     const token = localStorage.getItem("token");
-//     if (token) config.headers.Authorization = `Bearer ${token}`;
-//     return config;
-// });
+// If the session expires mid-use, send the user back to the login page.
+// /auth/login and /auth/me are excluded: a 401 there is an expected answer.
+api.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    const url = error.config?.url || ''
+    const isAuthCall = url.startsWith('/auth/login') || url.startsWith('/auth/me')
+    if (error.response?.status === 401 && !isAuthCall && window.location.pathname !== '/login') {
+      window.location.assign('/login?expired=1')
+    }
+    return Promise.reject(error)
+  }
+)
 
-export default api;
+export default api
