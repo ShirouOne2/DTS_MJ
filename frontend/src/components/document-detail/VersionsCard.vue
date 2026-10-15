@@ -113,8 +113,8 @@ async function onFileChange(event) {
   uploading.value = true
   progress.value = 0
   try {
-    const version = await uploadVersion(props.documentId, file, (p) => (progress.value = p))
-    emit('uploaded', version)
+    const detail = await uploadVersion(props.documentId, file, (p) => (progress.value = p))
+    emit('uploaded', detail)
   } catch (err) {
     error.value = errorMessage(err)
   } finally {

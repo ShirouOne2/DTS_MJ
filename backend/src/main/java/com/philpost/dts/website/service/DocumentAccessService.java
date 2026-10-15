@@ -1,23 +1,33 @@
 package com.philpost.dts.website.service;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import com.philpost.dts.website.entity.Document;
 import com.philpost.dts.website.entity.DocumentStatus;
 import com.philpost.dts.website.entity.Role;
+import com.philpost.dts.website.entity.RouteStep;
+import com.philpost.dts.website.entity.RouteType;
+import com.philpost.dts.website.entity.StepStatus;
 import com.philpost.dts.website.entity.User;
 import com.philpost.dts.website.exception.BusinessRuleException;
 import com.philpost.dts.website.exception.NotFoundException;
 import com.philpost.dts.website.repository.DocumentRepository;
+import com.philpost.dts.website.repository.RouteStepRepository;
 
 @Service
 public class DocumentAccessService {
 
     private final DocumentRepository documentRepository;
+    private final RouteStepRepository routeStepRepository;
+    
 
-    public DocumentAccessService(DocumentRepository documentRepository) {
+    public DocumentAccessService(DocumentRepository documentRepository, RouteStepRepository routeStepRepository) {
         this.documentRepository = documentRepository;
+        this.routeStepRepository = routeStepRepository;
     }
 
     public boolean seesAll(User user) {
@@ -32,8 +42,10 @@ public class DocumentAccessService {
 
     // Someone who may not see a document gets a 404, so its existence isn't revealed.
     public Document requireVisible(Document doc, User user) {
-        boolean visible = seesAll(user) || doc.getOriginDepartment().getDepartmentId()
-                .equals(user.getDepartment().getDepartmentId());
+        Long departmentId = user.getDepartment().getDepartmentId();
+        boolean visible = seesAll(user)
+                || doc.getOriginDepartment().getDepartmentId().equals(departmentId)
+                || routeStepRepository.hasReached(doc.getDocumentId(), departmentId);
         if (!visible) throw new NotFoundException("Document not found: " + doc.getDocumentId());
         return doc;
     }
@@ -59,5 +71,20 @@ public class DocumentAccessService {
     public void requireCanEdit(Document doc, User user) {
         requireCreator(doc, user);
         if (!isEditable(doc)) throw new BusinessRuleException("This document can no longer be edited.");
+    }
+    public List<String> stepActions(RouteStep step, User user) {
+        List<String> actions = new ArrayList<>();
+        if (step.getStatus() != StepStatus.ACTIVE) return actions;
+        if (!step.getDepartment().getDepartmentId().equals(user.getDepartment().getDepartmentId())) return actions;
+
+        if (step.getRoute().getRouteType() == RouteType.ADVISORY) {
+            actions.add("ACKNOWLEDGE");
+        } else if (step.getReceivedAt() == null) {
+            actions.add("RECEIVE");
+        } else if (!step.getActionCode().isRequiresSignature() || user.getRole() == Role.APPROVER) {
+            actions.add("COMPLETE");
+            actions.add("REJECT");
+        }
+        return actions;
     }
 }

@@ -37,20 +37,5 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
-import TransmittalTimeline from '../components/document-detail/TransmittalTimeline.vue'
-import StatusBadge from '../shared/StatusBadge.vue'
 
-const referenceNo = ref('')
-const result = ref(null)
-const loading = ref(false)
-const error = ref('')
-
-// TODO: connect to backend — GET /tracking/{referenceNo}
-async function search() {
-  if (!referenceNo.value.trim()) return
-  error.value = ''
-  result.value = null
-}
 </script>

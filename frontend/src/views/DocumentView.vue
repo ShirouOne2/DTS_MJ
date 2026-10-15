@@ -4,6 +4,17 @@
     <p v-else-if="loading && !doc" class="text-sm text-gray-400">Loading document...</p>
 
     <template v-else-if="doc">
+      <p v-if="actionError" class="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600">{{ actionError }}</p>
+
+      <div
+        v-if="rejection"
+        class="rounded-xl border border-rose-200 bg-rose-50 px-5 py-4"
+      >
+        <p class="text-sm font-semibold text-rose-600">Returned for revision by {{ rejection.by }}</p>
+        <p class="mt-1 whitespace-pre-line text-sm text-rose-600">{{ rejection.remarks }}</p>
+        <p class="mt-2 text-xs text-rose-500">Upload a corrected file, then resubmit.</p>
+      </div>
+
       <div class="space-y-3">
         <button
           type="button"
@@ -26,8 +37,15 @@
               </span>
             </div>
           </div>
-
           <div class="flex shrink-0 flex-wrap items-center gap-2">
+            <button
+              v-if="can('SUBMIT')"
+              class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
+              @click="showSubmit = true"
+            >
+              <PaperAirplaneIcon class="h-4 w-4" />
+              {{ doc.status === 'FOR_REVISION' ? 'Resubmit' : 'Submit for routing' }}
+            </button>
             <button
               v-if="can('EDIT')"
               class="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
@@ -67,6 +85,8 @@
         :can-upload="can('UPLOAD')"
         @uploaded="onUploaded"
       />
+
+      <RouteProgressCard :routes="doc.routes" :origin-name="doc.departmentName" @act="onStepAct" />
 
       <div class="rounded-xl border border-gray-200 bg-white shadow-sm">
         <div class="flex items-center gap-2 border-b border-gray-200 px-6 py-4">
@@ -123,23 +143,50 @@
         </div>
       </form>
     </div>
+    <SubmitRouteDialog
+      v-if="showSubmit && doc"
+      :document-id="doc.id"
+      @close="showSubmit = false"
+      @submitted="onSubmitted"
+    />
+    <StepActionDialog
+      v-if="stepDialog && doc"
+      :document-id="doc.id"
+      :step="stepDialog.step"
+      :action="stepDialog.action"
+      @close="stepDialog = null"
+      @done="onStepDone"
+    />
   </div>
 </template>
+
 
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  ArrowLeftIcon, BuildingOffice2Icon, PencilSquareIcon, XCircleIcon, XMarkIcon,
-  InformationCircleIcon, ChatBubbleLeftRightIcon
+  ArrowLeftIcon,
+  BuildingOffice2Icon,
+  PencilSquareIcon,
+  XCircleIcon,
+  XMarkIcon,
+  InformationCircleIcon,
+  ChatBubbleLeftRightIcon,
+  PaperAirplaneIcon
 } from '@heroicons/vue/24/outline'
 import StatusBadge from '../shared/StatusBadge.vue'
 import VersionsCard from '../components/document-detail/VersionsCard.vue'
+import RouteProgressCard from '../components/document-detail/RouteProgressCard.vue'
+import SubmitRouteDialog from '../components/document-detail/SubmitRouteDialog.vue'
+import StepActionDialog from '../components/document-detail/StepActionDialog.vue'
+import { receiveStep } from '@/api/routing'
 import { getDocument, updateDocument, cancelDocument, getDocumentTypes } from '@/api/documents'
 import { errorMessage } from '@/api/errors'
 
 const route = useRoute()
 const router = useRouter()
+const showSubmit = ref(false)
+
 
 const inputClass =
   'mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100'
@@ -156,6 +203,24 @@ const form = reactive({ title: '', documentTypeId: null, remarks: '' })
 
 const can = (action) => doc.value?.allowedActions?.includes(action)
 
+const actionError = ref('')
+const stepDialog = ref(null)
+
+const rejection = computed(() => {
+  if (doc.value?.status !== 'FOR_REVISION') return null
+
+  const step = doc.value.routes?.[0]?.steps?.find(
+    (s) => s.status === 'REJECTED'
+  )
+
+  return step
+    ? {
+        by: step.departmentName,
+        remarks: step.decisionRemarks
+      }
+    : null
+})
+
 function formatDate(iso) {
   if (!iso) return ''
   return new Date(iso).toLocaleString('en-US', {
@@ -163,8 +228,13 @@ function formatDate(iso) {
   })
 }
 
-function onUploaded(version) {
-  doc.value.versions = [version, ...doc.value.versions]
+function onSubmitted(detail) {
+  doc.value = detail
+  showSubmit.value = false
+}
+
+function onUploaded(detail) {
+  doc.value = detail
 }
 
 const fields = computed(() => [
@@ -174,6 +244,24 @@ const fields = computed(() => [
   { label: 'Date Created', value: formatDate(doc.value.createdAt) },
   { label: 'Last Updated', value: formatDate(doc.value.updatedAt) }
 ])
+
+async function onStepAct({ action, step }) {
+  actionError.value = ''
+  if (action === 'RECEIVE') {
+    try {
+      doc.value = await receiveStep(doc.value.id, step.id)
+    } catch (err) {
+      actionError.value = errorMessage(err)
+    }
+    return
+  }
+  stepDialog.value = { action, step }
+}
+
+function onStepDone(detail) {
+  doc.value = detail
+  stepDialog.value = null
+}
 
 async function load() {
   loading.value = true
@@ -220,15 +308,21 @@ async function saveEdit() {
   }
 }
 
+
 async function cancelDraft() {
-  if (!window.confirm('Cancel this draft? It will stay on record as Cancelled.')) return
-  error.value = ''
+  actionError.value = ''
+
+  if (!window.confirm('Cancel this draft? It will stay on record as Cancelled.')) {
+    return
+  }
+
   try {
     doc.value = await cancelDocument(doc.value.id)
   } catch (err) {
-    error.value = errorMessage(err)
+    actionError.value = errorMessage(err)
   }
 }
+
 
 watch(() => route.params.id, load, { immediate: true })
 </script>

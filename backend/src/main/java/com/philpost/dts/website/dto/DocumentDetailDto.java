@@ -8,4 +8,5 @@ public record DocumentDetailDto(Long id, String referenceNo, String title, Long 
                                 Long departmentId, String departmentName,
                                 String createdByName, String createdByUsername,
                                 LocalDateTime createdAt, LocalDateTime updatedAt,
-                                List<String> allowedActions, List<VersionDto> versions) {}
+                                List<String> allowedActions, List<VersionDto> versions,
+                                List<RouteDto> routes) {}

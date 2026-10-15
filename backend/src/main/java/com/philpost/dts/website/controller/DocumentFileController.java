@@ -3,6 +3,7 @@ package com.philpost.dts.website.controller;
 import java.nio.charset.StandardCharsets;
 
 import com.philpost.dts.website.service.DocumentFileService;
+import com.philpost.dts.website.dto.DocumentDetailDto;
 import com.philpost.dts.website.dto.VersionDto;
 
 import org.springframework.core.io.Resource;
@@ -29,7 +30,7 @@ public class DocumentFileController {
 
     @PostMapping(value = "/documents/{id}/versions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    public VersionDto upload(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
+    public DocumentDetailDto upload(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
         return fileService.upload(id, file);
     }
 
