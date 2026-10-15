@@ -1,24 +1,17 @@
-// Single source of truth for DOCUMENTS.status — matches the schema exactly.
-// Update colors here; every badge in the app pulls from this one place.
+const STATUSES = {
+  DRAFT: { label: 'Draft', style: 'bg-gray-100 text-gray-600' },
+  IN_ROUTING: { label: 'In Routing', style: 'bg-amber-50 text-amber-600' },
+  FOR_REVISION: { label: 'For Revision', style: 'bg-rose-50 text-rose-600' },
+  COMPLETED: { label: 'Completed', style: 'bg-emerald-50 text-emerald-600' },
+  CANCELLED: { label: 'Cancelled', style: 'bg-gray-100 text-gray-400' }
+}
 
-export const DOCUMENT_STATUSES = [
-  'Incoming',
-  'Ongoing',
-  'For Revise',
-  'Forwarded',
-  'Released',
-  'Completed'
-]
+export const DOCUMENT_STATUSES = Object.entries(STATUSES).map(([value, s]) => ({ value, label: s.label }))
 
-const STYLE_MAP = {
-  Incoming: 'bg-sky-50 text-sky-600',
-  Ongoing: 'bg-amber-50 text-amber-600',
-  'For Revise': 'bg-rose-50 text-rose-600',
-  Forwarded: 'bg-blue-50 text-blue-600',
-  Released: 'bg-emerald-50 text-emerald-600',
-  Completed: 'bg-gray-100 text-gray-600'
+export function statusLabel(status) {
+  return STATUSES[status]?.label || status
 }
 
 export function statusStyles(status) {
-  return STYLE_MAP[status] || 'bg-gray-100 text-gray-600'
+  return STATUSES[status]?.style || 'bg-gray-100 text-gray-600'
 }
