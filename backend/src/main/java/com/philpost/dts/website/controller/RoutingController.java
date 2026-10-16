@@ -41,8 +41,9 @@ public class RoutingController {
     @PostMapping(value = "/documents/{id}/steps/{stepId}/complete", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public DocumentDetailDto complete(@PathVariable Long id, @PathVariable Long stepId,
                                     @RequestParam(required = false) String remarks,
-                                    @RequestParam(value = "file", required = false) MultipartFile file) {
-        return routingService.complete(id, stepId, remarks, file);
+                                    @RequestParam(value = "file", required = false) MultipartFile file,
+                                    @RequestParam(defaultValue = "false") boolean confirmDuplicate) {
+        return routingService.complete(id, stepId, remarks, file, confirmDuplicate);
     }
 
     @PostMapping("/documents/{id}/steps/{stepId}/reject")
@@ -55,5 +56,9 @@ public class RoutingController {
     public DocumentDetailDto acknowledge(@PathVariable Long id, @PathVariable Long stepId,
                                         @Valid @RequestBody StepNoteRequest request) {
         return routingService.acknowledge(id, stepId, request.remarks());
+    }
+    @PostMapping("/documents/{id}/recall")
+    public DocumentDetailDto recall(@PathVariable Long id) {
+        return routingService.recall(id);
     }
 }

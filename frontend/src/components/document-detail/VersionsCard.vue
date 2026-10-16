@@ -22,6 +22,30 @@
 
     <p v-if="error" class="mx-6 mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600">{{ error }}</p>
 
+    <div v-if="duplicate" class="mx-6 mt-4 rounded-lg bg-amber-50 px-4 py-3">
+    <p class="text-sm font-semibold text-amber-600">Possible duplicate</p>
+    <p class="mt-0.5 text-sm text-amber-600">{{ duplicate.message }}</p>
+    <p class="mt-1 text-xs text-amber-600">
+        If you continue, the file is not stored twice on the server, and the upload is flagged in the audit log.
+    </p>
+    <div class="mt-3 flex gap-2">
+        <button
+        type="button"
+        class="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500"
+        @click="uploadAnyway"
+        >
+        Upload anyway
+        </button>
+        <button
+        type="button"
+        class="rounded-lg border border-amber-200 px-3 py-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-100"
+        @click="cancelDuplicate"
+        >
+        Cancel
+        </button>
+    </div>
+    </div>
+
     <ul class="divide-y divide-gray-100">
       <li
         v-for="(v, index) in versions"
@@ -83,7 +107,7 @@
 import { ref } from 'vue'
 import { PaperClipIcon, ArrowUpTrayIcon, ArrowDownTrayIcon } from '@heroicons/vue/24/outline'
 import { uploadVersion, downloadVersion } from '@/api/documents'
-import { errorMessage } from '@/api/errors'
+import { errorMessage, duplicateWarning } from '@/api/errors'
 
 const ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.txt,.csv'
 const MAX_BYTES = 50 * 1024 * 1024
@@ -102,21 +126,37 @@ const progress = ref(0)
 const downloadingId = ref(null)
 const error = ref('')
 
+const duplicate = ref(null)
+let pendingFile = null
+
 async function onFileChange(event) {
   const file = event.target.files[0]
   event.target.value = '' // lets the same file be picked again later
   if (!file) return
   error.value = ''
+  duplicate.value = null
   if (file.size === 0) return (error.value = 'That file is empty.')
   if (file.size > MAX_BYTES) return (error.value = 'File exceeds the 50 MB limit.')
+  await send(file, false)
+}
 
+async function send(file, confirm) {
   uploading.value = true
   progress.value = 0
+  error.value = ''
   try {
-    const detail = await uploadVersion(props.documentId, file, (p) => (progress.value = p))
+    const detail = await uploadVersion(props.documentId, file, (p) => (progress.value = p), confirm)
+    duplicate.value = null
+    pendingFile = null
     emit('uploaded', detail)
   } catch (err) {
-    error.value = errorMessage(err)
+    const warning = duplicateWarning(err)
+    if (warning) {
+      duplicate.value = warning
+      pendingFile = file
+    } else {
+      error.value = errorMessage(err)
+    }
   } finally {
     uploading.value = false
   }
@@ -134,8 +174,20 @@ async function download(version) {
   }
 }
 
-const KINDS = { ORIGINAL: 'Original', REVISION: 'Revision', SIGNED: 'Signed copy' }
+const KINDS = {
+  ORIGINAL: 'Original', REVISION: 'Revision', SIGNED: 'Signed copy',
+  EDITED: 'Edited copy', DRAFT_REPLY: 'Draft reply', ATTACHMENT: 'Attachment'
+}
 const kindLabel = (kind) => KINDS[kind] || kind
+
+function uploadAnyway() {
+  if (pendingFile) send(pendingFile, true)
+}
+
+function cancelDuplicate() {
+  duplicate.value = null
+  pendingFile = null
+}
 
 function extensionOf(name) {
   const i = name.lastIndexOf('.')

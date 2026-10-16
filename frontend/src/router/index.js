@@ -12,6 +12,7 @@ import LoginView from '../views/LoginView.vue'
 import DepartmentsView from '../views/admin/DepartmentsView.vue'
 import UsersView from '../views/admin/UsersView.vue'
 import AuditLogView from '../views/admin/AuditLogView.vue'
+import InboxView from '../views/InboxView.vue'
 import { auth } from '@/stores/auth'
 
 const router = createRouter({
@@ -27,6 +28,11 @@ const router = createRouter({
       path: '/',
       name: 'dashboard',
       component: Dashboard,
+    },
+    {
+      path: '/inbox',
+      name: 'inbox',
+      component: InboxView,
     },
     {
       path: '/admin/departments',

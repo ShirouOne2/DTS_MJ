@@ -60,9 +60,11 @@ import DocumentsFilterBar from '../components/documents/DocumentsFilterBar.vue'
 import DocumentsTable from '../components/documents/DocumentsTable.vue'
 import { getDocuments } from '@/api/documents'
 import { errorMessage } from '@/api/errors'
+import { useRoute } from 'vue-router'
 
 const search = ref('')
-const statusFilter = ref('All')
+const route = useRoute()
+const statusFilter = ref(route.query.status || 'All')
 const result = ref({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
 const loading = ref(false)
 const error = ref('')

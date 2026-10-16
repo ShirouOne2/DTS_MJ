@@ -19,6 +19,7 @@ import com.philpost.dts.website.entity.Department;
 import com.philpost.dts.website.entity.Document;
 import com.philpost.dts.website.entity.DocumentStatus;
 import com.philpost.dts.website.entity.DocumentVersion;
+import com.philpost.dts.website.entity.FileRule;
 import com.philpost.dts.website.entity.Route;
 import com.philpost.dts.website.entity.RouteStatus;
 import com.philpost.dts.website.entity.RouteStep;
@@ -143,6 +144,11 @@ public class RoutingService {
                     throw new BusinessRuleException(
                             "For Information is its own routing type. Pick an action for each step.");
                 }
+
+                if (code.isInstructionRequired() && blankToNull(sr.instruction()) == null) {
+                    throw new BusinessRuleException("Step %d: %s needs an instruction saying what is expected."
+                            .formatted(order, code.getCode()));
+                }
             }
 
             // For Information: everyone is active at once. For Action: only the first step starts.
@@ -189,17 +195,26 @@ public class RoutingService {
     }
 
     @Transactional
-    public DocumentDetailDto complete(Long documentId, Long stepId, String remarks, MultipartFile file) {
+    public DocumentDetailDto complete(Long documentId, Long stepId, String remarks, MultipartFile file,
+                                    boolean confirmDuplicate) {
         User user = currentUserService.get();
         Document doc = lockVisible(documentId, user);
         RouteStep step = loadStep(documentId, stepId);
         requireAction(step, user, "COMPLETE");
 
-        if (file != null && !file.isEmpty()) {
-            if (!step.getActionCode().isRequiresSignature()) {
-                throw new BusinessRuleException("A signed copy can only be attached to a signature step.");
-            }
-            step.setSignedVersion(fileService.storeVersion(doc, user, file, VersionKind.SIGNED));
+        ActionCode code = step.getActionCode();
+        boolean hasFile = file != null && !file.isEmpty();
+        VersionKind kind = code.getFileKind() != null ? code.getFileKind() : VersionKind.ATTACHMENT;
+
+        if (hasFile && code.getFileRule() == FileRule.NONE) {
+            throw new BusinessRuleException("This step doesn't take a file.");
+        }
+        if (!hasFile && code.getFileRule() == FileRule.REQUIRED) {
+            throw new BusinessRuleException("Attach the " + kind.getLabel().toLowerCase() + " to complete this step.");
+        }
+        if (hasFile) {
+            // Becomes the newest version, so the next office receives it.
+            step.setResultVersion(fileService.storeVersion(doc, user, file, kind, confirmDuplicate));
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -210,7 +225,6 @@ public class RoutingService {
         step.setDecisionRemarks(cleanNote(remarks));
 
         Route route = step.getRoute();
-        // Steps are ordered, so the first waiting step is the next one in line.
         Optional<RouteStep> next = route.getSteps().stream()
                 .filter(s -> s.getStatus() == StepStatus.WAITING).findFirst();
         if (next.isPresent()) {
@@ -339,5 +353,28 @@ public class RoutingService {
     private String describe(Document doc, RouteStep step) {
         return "%s round %d step %d, %s (%s)".formatted(doc.getReferenceNo(), step.getRoute().getRoundNo(),
                 step.getStepOrder(), step.getDepartment().getName(), step.getActionCode().getCode());
+    }
+    @Transactional
+    public DocumentDetailDto recall(Long documentId) {
+        User user = currentUserService.get();
+        Document doc = lockVisible(documentId, user);
+        access.requireCreator(doc, user);
+
+        Route round = routeRepository.findByDocumentIdWithDetails(documentId).stream().findFirst().orElse(null);
+        if (!access.canRecall(doc, user, round)) {
+            throw new BusinessRuleException(
+                    "This document can't be recalled. A recall is only possible before any department has received or acted on it.");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        round.getSteps().forEach(s -> s.setStatus(StepStatus.SKIPPED));
+        round.setStatus(RouteStatus.RECALLED);
+        round.setEndedAt(now);
+        doc.setStatus(DocumentStatus.DRAFT);
+        touch(doc);
+
+        auditService.log(AuditAction.ROUTE_RECALLED, "DOCUMENT", documentId,
+                "%s round %d recalled".formatted(doc.getReferenceNo(), round.getRoundNo()));
+        return documentService.toDetail(doc, user);
     }
 }

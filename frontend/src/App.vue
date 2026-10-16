@@ -28,12 +28,13 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Sidebar from './components/layout/Sidebar.vue'
 import AppHeader from './components/layout/AppHeader.vue'
 import AppFooter from './components/layout/AppFooter.vue'
 import UndoToast from './shared/UndoToast.vue'
+import { summary } from './stores/summary'
 import { auth } from './stores/auth'
 
 const route = useRoute()
@@ -70,4 +71,20 @@ function toggleSidebar() {
 watch(sidebarOpen, (value) => {
   localStorage.setItem('sidebarOpen', String(value))
 })
+
+let summaryTimer = null
+watch(
+  () => auth.user,
+  (user) => {
+    clearInterval(summaryTimer)
+    if (user) {
+      summary.refresh()
+      summaryTimer = setInterval(() => summary.refresh(), 60000)
+    } else {
+      summary.reset()
+    }
+  },
+  { immediate: true }
+)
+onUnmounted(() => clearInterval(summaryTimer))
 </script>

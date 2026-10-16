@@ -9,8 +9,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
+import com.philpost.dts.website.dto.DuplicateWarningResponse;
+
 import lombok.extern.slf4j.Slf4j;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Slf4j
@@ -68,5 +71,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleTooLarge(MaxUploadSizeExceededException ex) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(ErrorResponse.of(413, "Payload Too Large", "File exceeds the 50 MB limit."));
+    }
+    @ExceptionHandler(DuplicateFileException.class)
+    public ResponseEntity<DuplicateWarningResponse> handleDuplicate(DuplicateFileException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new DuplicateWarningResponse(
+                409, "Duplicate file", ex.getMessage(), true,
+                ex.getScope(), ex.getReferenceNo(), ex.getVersionNo(), LocalDateTime.now()));
     }
 }

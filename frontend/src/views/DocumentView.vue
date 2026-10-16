@@ -47,6 +47,14 @@
               {{ doc.status === 'FOR_REVISION' ? 'Resubmit' : 'Submit for routing' }}
             </button>
             <button
+              v-if="can('RECALL')"
+              class="inline-flex items-center gap-2 rounded-lg border border-amber-200 px-3 py-2 text-sm font-semibold text-amber-600 transition-colors hover:bg-amber-50"
+              @click="recall"
+            >
+              <ArrowUturnLeftIcon class="h-4 w-4" />
+              Recall
+            </button>
+            <button
               v-if="can('EDIT')"
               class="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
               @click="openEdit"
@@ -179,7 +187,8 @@ import VersionsCard from '../components/document-detail/VersionsCard.vue'
 import RouteProgressCard from '../components/document-detail/RouteProgressCard.vue'
 import SubmitRouteDialog from '../components/document-detail/SubmitRouteDialog.vue'
 import StepActionDialog from '../components/document-detail/StepActionDialog.vue'
-import { receiveStep } from '@/api/routing'
+import { receiveStep, recallDocument } from '@/api/routing'
+import { summary } from '@/stores/summary'
 import { getDocument, updateDocument, cancelDocument, getDocumentTypes } from '@/api/documents'
 import { errorMessage } from '@/api/errors'
 
@@ -244,6 +253,17 @@ const fields = computed(() => [
   { label: 'Date Created', value: formatDate(doc.value.createdAt) },
   { label: 'Last Updated', value: formatDate(doc.value.updatedAt) }
 ])
+
+async function recall() {
+  if (!window.confirm('Recall this document? It goes back to Draft, and you can edit and resubmit it.')) return
+  actionError.value = ''
+  try {
+    doc.value = await recallDocument(doc.value.id)
+    summary.refresh()
+  } catch (err) {
+    actionError.value = errorMessage(err)
+  }
+}
 
 async function onStepAct({ action, step }) {
   actionError.value = ''

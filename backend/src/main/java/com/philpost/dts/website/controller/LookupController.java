@@ -21,11 +21,9 @@ public class LookupController {
     @GetMapping("/action-codes")
     public List<ActionCodeDto> actionCodes() {
         return actionCodeRepository.findAll(Sort.by("code")).stream()
-                .map(c -> new ActionCodeDto(
-                        c.getCode(),
-                        c.getLabel(),
-                        c.isRequiresSignature(),
-                        c.isAdvisory()))
+                .map(c -> new ActionCodeDto(c.getCode(), c.getLabel(), c.isRequiresSignature(), c.isAdvisory(),
+                        c.getFileRule().name(), c.getFileKind() != null ? c.getFileKind().name() : null,
+                        c.isInstructionRequired()))
                 .toList();
     }
 }

@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import com.philpost.dts.website.entity.Document;
 import com.philpost.dts.website.entity.DocumentStatus;
 import com.philpost.dts.website.entity.Role;
+import com.philpost.dts.website.entity.Route;
+import com.philpost.dts.website.entity.RouteStatus;
 import com.philpost.dts.website.entity.RouteStep;
 import com.philpost.dts.website.entity.RouteType;
 import com.philpost.dts.website.entity.StepStatus;
@@ -34,6 +36,13 @@ public class DocumentAccessService {
         return user.getRole() == Role.ADMIN || user.getRole() == Role.RECORDS;
     }
 
+    public boolean canSee(Document doc, User user) {
+        Long departmentId = user.getDepartment().getDepartmentId();
+        return seesAll(user)
+                || doc.getOriginDepartment().getDepartmentId().equals(departmentId)
+                || routeStepRepository.hasReached(doc.getDocumentId(), departmentId);
+    }
+
     public Document requireVisible(Long id, User user) {
         Document doc = documentRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Document not found: " + id));
@@ -42,11 +51,7 @@ public class DocumentAccessService {
 
     // Someone who may not see a document gets a 404, so its existence isn't revealed.
     public Document requireVisible(Document doc, User user) {
-        Long departmentId = user.getDepartment().getDepartmentId();
-        boolean visible = seesAll(user)
-                || doc.getOriginDepartment().getDepartmentId().equals(departmentId)
-                || routeStepRepository.hasReached(doc.getDocumentId(), departmentId);
-        if (!visible) throw new NotFoundException("Document not found: " + doc.getDocumentId());
+        if (!canSee(doc, user)) throw new NotFoundException("Document not found: " + doc.getDocumentId());
         return doc;
     }
 
@@ -86,5 +91,14 @@ public class DocumentAccessService {
             actions.add("REJECT");
         }
         return actions;
+    }
+
+    public boolean canRecall(Document doc, User user, Route latestRound) {
+        return latestRound != null
+                && isCreator(doc, user)
+                && doc.getStatus() == DocumentStatus.IN_ROUTING
+                && latestRound.getStatus() == RouteStatus.ACTIVE
+                && latestRound.getSteps().stream()
+                        .noneMatch(s -> s.getReceivedAt() != null || s.getDecision() != null);
     }
 }

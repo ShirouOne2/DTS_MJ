@@ -84,6 +84,6 @@ public class RouteStep {
     private String decisionRemarks;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "signed_version_id")
-    private DocumentVersion signedVersion;
+    @JoinColumn(name = "result_version_id")
+    private DocumentVersion resultVersion;   // was: signedVersion
 }

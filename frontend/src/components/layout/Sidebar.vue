@@ -44,6 +44,26 @@
           </router-link>
 
           <router-link
+            to="/inbox"
+            class="relative flex items-center gap-3 border-l-4 border-transparent py-3 pl-5 text-gray-600 transition-colors duration-200 hover:rounded-r-full hover:bg-blue-50 hover:text-blue-600"
+            :class="activePage === 'inbox' ? 'rounded-r-full border-blue-600 bg-blue-50 pr-8 font-semibold text-blue-600' : 'pr-4'"
+          >
+            <InboxArrowDownIcon class="h-5 w-5 shrink-0" />
+            <span
+              class="whitespace-nowrap transition-opacity duration-200"
+              :class="isOpen ? 'opacity-100' : 'opacity-0'"
+              >Awaiting Action</span
+            >
+            <span
+              v-if="summary.awaitingAction > 0"
+              class="ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[0.65rem] font-bold text-white transition-opacity duration-200"
+              :class="[summary.overdue > 0 ? 'bg-rose-600' : 'bg-blue-600', isOpen ? 'opacity-100' : 'opacity-0']"
+            >
+              {{ summary.awaitingAction }}
+            </span>
+          </router-link>
+
+          <router-link
             to="/create"
             class="flex items-center gap-3 border-l-4 border-transparent py-3 pl-5 text-gray-600 transition-colors duration-200 hover:rounded-r-full hover:bg-blue-50 hover:text-blue-600"
             :class="activePage === 'create' ? 'rounded-r-full border-blue-600 bg-blue-50 pr-8 font-semibold text-blue-600' : 'pr-4'"
@@ -254,6 +274,8 @@
 
 <script setup>
 import pstmnIcon from '@/assets/pstmnIcon.png'
+import { summary } from '@/stores/summary'
+
 import {
   Squares2X2Icon,
   CloudArrowUpIcon,
@@ -269,7 +291,8 @@ import {
   WrenchScrewdriverIcon,
   ArrowRightOnRectangleIcon,
   BuildingOffice2Icon,
-  UsersIcon
+  UsersIcon,
+  InboxArrowDownIcon
 } from '@heroicons/vue/24/outline'
 
 defineProps({

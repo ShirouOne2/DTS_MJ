@@ -12,15 +12,24 @@
         <p class="text-sm text-gray-600">{{ intro }}</p>
         <p v-if="error" class="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600">{{ error }}</p>
 
+        <div v-if="duplicate" class="rounded-lg bg-amber-50 px-3 py-2">
+          <p class="text-sm font-semibold text-amber-600">Possible duplicate</p>
+          <p class="mt-0.5 text-sm text-amber-600">{{ duplicate.message }}</p>
+          <p class="mt-1 text-xs text-amber-600">Choose another file, or press Continue anyway.</p>
+        </div>
+
         <div v-if="showFile">
-          <label class="text-xs font-semibold uppercase tracking-wide text-gray-400">Signed copy (optional)</label>
+          <label class="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            {{ fileLabel }} {{ fileRequired ? '' : '(optional)' }}
+            <span v-if="fileRequired" class="text-rose-500">*</span>
+          </label>
           <input
             type="file"
             :accept="ACCEPT"
             class="mt-1.5 block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-blue-600 hover:file:bg-blue-100"
-            @change="file = $event.target.files[0] || null"
+            @change="onFileChange"
           />
-          <p class="mt-1 text-xs text-gray-400">If attached, it becomes the current version for the next office.</p>
+          <p class="mt-1 text-xs text-gray-400">If attached, it becomes the latest version for the next office.</p>
         </div>
 
         <div>
@@ -49,10 +58,10 @@
         <button
           type="submit"
           class="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          :class="isReject ? 'bg-rose-600 hover:bg-rose-500' : 'bg-blue-600 hover:bg-blue-500'"
-          :disabled="busy || (isReject && !remarks.trim())"
+          :class="isReject ? 'bg-rose-600 hover:bg-rose-500' : duplicate ? 'bg-amber-600 hover:bg-amber-500' : 'bg-blue-600 hover:bg-blue-500'"
+          :disabled="busy || (isReject && !remarks.trim()) || (showFile && fileRequired && !file)"
         >
-          {{ busy ? 'Saving...' : confirmLabel }}
+          {{ busy ? 'Saving...' : duplicate ? 'Continue anyway' : confirmLabel }}
         </button>
       </div>
     </form>
@@ -63,10 +72,11 @@
 import { ref, computed } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { completeStep, rejectStep, acknowledgeStep } from '@/api/routing'
-import { errorMessage } from '@/api/errors'
+import { errorMessage, duplicateWarning } from '@/api/errors'
 
 const ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.txt,.csv'
 const MAX_BYTES = 50 * 1024 * 1024
+const KIND_LABEL = { SIGNED: 'Signed copy', EDITED: 'Edited file', DRAFT_REPLY: 'Draft reply', ATTACHMENT: 'Attachment' }
 
 const props = defineProps({
   documentId: { type: Number, required: true },
@@ -79,20 +89,31 @@ const remarks = ref('')
 const file = ref(null)
 const busy = ref(false)
 const error = ref('')
+const duplicate = ref(null)
+const confirmDuplicate = ref(false)
 
 const isReject = computed(() => props.action === 'REJECT')
-const showFile = computed(() => props.action === 'COMPLETE' && props.step.requiresSignature)
+const fileRule = computed(() => props.step.fileRule || 'NONE')
+const showFile = computed(() => props.action === 'COMPLETE' && fileRule.value !== 'NONE')
+const fileRequired = computed(() => fileRule.value === 'REQUIRED')
+const fileLabel = computed(() => KIND_LABEL[props.step.fileKind] || 'File')
+
+const completeTitle = computed(() => {
+  if (props.step.requiresSignature) return 'Sign / approve'
+  if (props.step.fileKind === 'DRAFT_REPLY') return 'Submit draft reply'
+  return 'Mark as done'
+})
 
 const title = computed(() => {
   if (props.action === 'REJECT') return 'Reject and return for revision'
   if (props.action === 'ACKNOWLEDGE') return 'Acknowledge'
-  return props.step.requiresSignature ? 'Sign / approve' : 'Mark as done'
+  return completeTitle.value
 })
 
 const confirmLabel = computed(() => {
   if (props.action === 'REJECT') return 'Reject'
   if (props.action === 'ACKNOWLEDGE') return 'Acknowledge'
-  return props.step.requiresSignature ? 'Sign / approve' : 'Mark done'
+  return completeTitle.value === 'Mark as done' ? 'Mark done' : completeTitle.value
 })
 
 const intro = computed(() => {
@@ -102,6 +123,12 @@ const intro = computed(() => {
   }
   return what
 })
+
+function onFileChange(event) {
+  file.value = event.target.files[0] || null
+  duplicate.value = null        // a different file: start the check again
+  confirmDuplicate.value = false
+}
 
 async function submit() {
   error.value = ''
@@ -113,10 +140,16 @@ async function submit() {
     let detail
     if (props.action === 'REJECT') detail = await rejectStep(id, sid, remarks.value.trim())
     else if (props.action === 'ACKNOWLEDGE') detail = await acknowledgeStep(id, sid, remarks.value.trim() || null)
-    else detail = await completeStep(id, sid, remarks.value.trim(), file.value)
+    else detail = await completeStep(id, sid, remarks.value.trim(), file.value, confirmDuplicate.value)
     emit('done', detail)
   } catch (err) {
-    error.value = errorMessage(err)
+    const warning = duplicateWarning(err)
+    if (warning) {
+      duplicate.value = warning
+      confirmDuplicate.value = true // the next press of the button continues anyway
+    } else {
+      error.value = errorMessage(err)
+    }
   } finally {
     busy.value = false
   }

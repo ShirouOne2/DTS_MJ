@@ -31,7 +31,13 @@
             </span>
           </div>
           <p v-if="step.instruction" class="mt-0.5 text-sm text-gray-600">{{ step.instruction }}</p>
-          <p v-if="step.dueDate && step.status !== 'DONE'" class="mt-0.5 text-xs text-amber-600">Due {{ step.dueDate }}</p>
+          <p
+            v-if="step.dueDate && (step.status === 'ACTIVE' || step.status === 'WAITING')"
+            class="mt-0.5 text-xs"
+            :class="step.overdue ? 'font-semibold text-rose-600' : 'text-amber-600'"
+            >
+            {{ step.overdue ? 'Overdue, was due' : 'Due' }} {{ step.dueDate }}
+          </p>
           <p v-if="step.receivedAt" class="mt-0.5 text-xs text-gray-400">
             Received by {{ step.receivedByName }} &middot; {{ formatDate(step.receivedAt) }}
           </p>
@@ -41,9 +47,9 @@
           <p v-if="step.decisionRemarks" class="mt-1 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600">
             {{ step.decisionRemarks }}
           </p>
-          <p v-if="step.signedVersionNo" class="mt-1 text-xs font-medium text-emerald-600">
-            Signed copy attached (v{{ step.signedVersionNo }})
-          </p>
+          <p v-if="step.resultVersionNo" class="mt-1 text-xs font-medium text-emerald-600">
+            {{ RESULT_LABELS[step.resultKind] || 'File' }} attached (v{{ step.resultVersionNo }})
+            </p>
 
           <div v-if="step.allowedActions?.length" class="mt-2 flex flex-wrap gap-2">
             <button
@@ -87,7 +93,9 @@ function actionLabel(action, step) {
   if (action === 'RECEIVE') return 'Receive'
   if (action === 'ACKNOWLEDGE') return 'Acknowledge'
   if (action === 'REJECT') return 'Reject'
-  return step.requiresSignature ? 'Sign / approve' : 'Mark done'
+  if (step.requiresSignature) return 'Sign / approve'
+  if (step.fileKind === 'DRAFT_REPLY') return 'Submit draft reply'
+  return 'Mark done'
 }
 
 const ROUTE_STATUS = {
@@ -103,6 +111,10 @@ const STEP_STATUS = {
   DONE: { label: 'Done', style: 'bg-emerald-50 text-emerald-600', dot: 'bg-emerald-50 text-emerald-600' },
   REJECTED: { label: 'Rejected', style: 'bg-rose-50 text-rose-600', dot: 'bg-rose-50 text-rose-600' },
   SKIPPED: { label: 'Skipped', style: 'bg-gray-100 text-gray-400', dot: 'bg-gray-100 text-gray-400' }
+}
+
+const RESULT_LABELS = {
+  SIGNED: 'Signed copy', EDITED: 'Edited copy', DRAFT_REPLY: 'Draft reply', ATTACHMENT: 'Attachment'
 }
 
 function stepLabel(step) {

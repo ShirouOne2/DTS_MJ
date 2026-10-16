@@ -19,4 +19,8 @@ public interface DocumentVersionRepository extends JpaRepository<DocumentVersion
     int maxVersionNo(@Param("documentId") Long documentId);
 
     Optional<DocumentVersion> findByVersionIdAndDocument_DocumentId(Long versionId, Long documentId);
+    @Query("select v from DocumentVersion v join fetch v.document "
+     + "where v.sha256 = :sha256 and v.sizeBytes = :size order by v.uploadedAt desc")
+        
+    List<DocumentVersion> findDuplicates(@Param("sha256") String sha256, @Param("size") long size);
 }

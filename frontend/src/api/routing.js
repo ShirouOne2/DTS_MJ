@@ -9,10 +9,11 @@ const stepUrl = (docId, stepId) => `/documents/${docId}/steps/${stepId}`
 export const receiveStep = (docId, stepId) =>
   api.post(`${stepUrl(docId, stepId)}/receive`).then((r) => r.data)
 
-export const completeStep = (docId, stepId, remarks, file) => {
+export const completeStep = (docId, stepId, remarks, file, confirmDuplicate = false) => {
   const body = new FormData()
   if (remarks) body.append('remarks', remarks)
   if (file) body.append('file', file)
+  body.append('confirmDuplicate', String(confirmDuplicate))
   return api
     .post(`${stepUrl(docId, stepId)}/complete`, body, { headers: { 'Content-Type': 'multipart/form-data' } })
     .then((r) => r.data)
@@ -23,3 +24,5 @@ export const rejectStep = (docId, stepId, remarks) =>
 
 export const acknowledgeStep = (docId, stepId, remarks) =>
   api.post(`${stepUrl(docId, stepId)}/acknowledge`, { remarks }).then((r) => r.data)
+
+export const recallDocument = (docId) => api.post(`/documents/${docId}/recall`).then((r) => r.data)

@@ -11,7 +11,6 @@ import org.springframework.data.repository.query.Param;
 
 import com.philpost.dts.website.entity.Document;
 import com.philpost.dts.website.entity.DocumentStatus;
-import com.philpost.dts.website.entity.StepStatus;
 
 import jakarta.persistence.LockModeType;
 
@@ -28,7 +27,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
               or exists (select 1 from RouteStep s
                           where s.route.document = d
                             and s.department.departmentId = :departmentId
-                            and s.status <> :waiting))
+                            and s.activatedAt is not null))
           and (:status is null or d.status = :status)
           and (:q is null or lower(d.title) like lower(concat('%', :q, '%'))
                           or lower(d.referenceNo) like lower(concat('%', :q, '%')))
@@ -42,17 +41,17 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
               or exists (select 1 from RouteStep s
                           where s.route.document = d
                             and s.department.departmentId = :departmentId
-                            and s.status <> :waiting))
+                            and s.activatedAt is not null))
           and (:status is null or d.status = :status)
           and (:q is null or lower(d.title) like lower(concat('%', :q, '%'))
                           or lower(d.referenceNo) like lower(concat('%', :q, '%')))
         """)
-    Page<Document> search(@Param("seeAll") boolean seeAll,
-                          @Param("departmentId") Long departmentId,
-                          @Param("status") DocumentStatus status,
-                          @Param("q") String q,
-                          @Param("waiting") StepStatus waiting,
-                          Pageable pageable);
+    Page<Document> search(
+        @Param("seeAll") boolean seeAll,
+        @Param("departmentId") Long departmentId,
+        @Param("status") DocumentStatus status,
+        @Param("q") String q,
+        Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select d from Document d where d.documentId = :id")

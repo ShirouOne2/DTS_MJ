@@ -4,6 +4,8 @@ package com.philpost.dts.website.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -29,4 +31,15 @@ public class ActionCode {
 
     @Column(name = "is_advisory", nullable = false)
     private boolean advisory;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "file_rule", nullable = false, length = 10)
+    private FileRule fileRule;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "file_kind", length = 20)
+    private VersionKind fileKind;
+
+    @Column(name = "instruction_required", nullable = false)
+    private boolean instructionRequired;
 }

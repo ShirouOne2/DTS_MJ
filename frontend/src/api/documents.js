@@ -7,11 +7,12 @@ export const createDocument = (payload) => api.post('/documents', payload).then(
 export const updateDocument = (id, payload) => api.put(`/documents/${id}`, payload).then((r) => r.data)
 export const cancelDocument = (id) => api.post(`/documents/${id}/cancel`).then((r) => r.data)
 
-export const uploadVersion = (documentId, file, onProgress) => {
+export const uploadVersion = (documentId, file, onProgress, confirmDuplicate = false) => {
   const body = new FormData()
   body.append('file', file)
   return api
     .post(`/documents/${documentId}/versions`, body, {
+      params: { confirmDuplicate },
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (e) => e.total && onProgress?.(Math.round((e.loaded / e.total) * 100))
     })

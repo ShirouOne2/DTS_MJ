@@ -30,8 +30,9 @@ public class DocumentFileController {
 
     @PostMapping(value = "/documents/{id}/versions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    public DocumentDetailDto upload(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
-        return fileService.upload(id, file);
+    public DocumentDetailDto upload(@PathVariable Long id, @RequestParam("file") MultipartFile file,
+                                    @RequestParam(defaultValue = "false") boolean confirmDuplicate) {
+        return fileService.upload(id, file, confirmDuplicate);
     }
 
     @GetMapping("/documents/{id}/versions/{versionId}/download")

@@ -1,5 +1,6 @@
 package com.philpost.dts.website.service;
 
+import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 import java.time.LocalDateTime;
@@ -12,7 +13,6 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.philpost.dts.website.dto.VersionDto;
 import com.philpost.dts.website.dto.DocumentDetailDto;
 import com.philpost.dts.website.entity.AuditAction;
 import com.philpost.dts.website.entity.Document;
@@ -20,6 +20,7 @@ import com.philpost.dts.website.entity.DocumentVersion;
 import com.philpost.dts.website.entity.User;
 import com.philpost.dts.website.entity.VersionKind;
 import com.philpost.dts.website.exception.BusinessRuleException;
+import com.philpost.dts.website.exception.DuplicateFileException;
 import com.philpost.dts.website.exception.NotFoundException;
 import com.philpost.dts.website.repository.DocumentRepository;
 import com.philpost.dts.website.repository.DocumentVersionRepository;
@@ -66,7 +67,7 @@ public class DocumentFileService {
     }
 
     @Transactional
-    public DocumentDetailDto upload(Long documentId, MultipartFile file) {
+    public DocumentDetailDto upload(Long documentId, MultipartFile file, boolean confirmDuplicate) {
         User user = currentUserService.get();
 
         // Row lock: two uploads to the same document take turns, so version numbers never collide.
@@ -75,7 +76,7 @@ public class DocumentFileService {
         access.requireVisible(doc, user);
         access.requireCanEdit(doc, user);
 
-        storeVersion(doc, user, file, null);
+        storeVersion(doc, user, file, null, confirmDuplicate);
         return documentService.toDetail(doc, user);
     }
 
@@ -85,7 +86,8 @@ public class DocumentFileService {
      * kind = null means ORIGINAL for version 1 and REVISION after that.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public DocumentVersion storeVersion(Document doc, User user, MultipartFile file, VersionKind kind) {
+    public DocumentVersion storeVersion(Document doc, User user, MultipartFile file, VersionKind kind,
+                                        boolean confirmDuplicate) {
         if (file == null || file.isEmpty()) throw new BusinessRuleException("Please choose a file.");
         if (file.getSize() > MAX_BYTES) throw new BusinessRuleException("File exceeds the 50 MB limit.");
 
@@ -97,36 +99,80 @@ public class DocumentFileService {
                     + String.join(", ", new TreeSet<>(ALLOWED.keySet())) + ".");
         }
 
-        FileStorageService.StoredFile stored = storage.store(file, extension);
+        FileStorageService.StagedFile staged = storage.stage(file, extension);
+        try {
+            List<DocumentVersion> matches = versionRepository.findDuplicates(staged.sha256(), staged.size());
+            String duplicateOf = null;
 
-        // If the database transaction rolls back, don't leave the file behind.
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCompletion(int status) {
-                if (status != STATUS_COMMITTED) storage.deleteQuietly(stored.relativePath());
+            if (!matches.isEmpty()) {
+                Long thisDoc = doc.getDocumentId();
+                DocumentVersion sameDoc = matches.stream()
+                        .filter(v -> v.getDocument().getDocumentId().equals(thisDoc)).findFirst().orElse(null);
+                DocumentVersion visibleOther = matches.stream()
+                        .filter(v -> !v.getDocument().getDocumentId().equals(thisDoc)
+                                && access.canSee(v.getDocument(), user))
+                        .findFirst().orElse(null);
+                DocumentVersion first = sameDoc != null ? sameDoc : visibleOther != null ? visibleOther : matches.get(0);
+                duplicateOf = first.getDocument().getReferenceNo() + " v" + first.getVersionNo();
+
+                if (!confirmDuplicate) {
+                    if (sameDoc != null) {
+                        throw new DuplicateFileException(
+                                "This file is identical to v%d of this document.".formatted(sameDoc.getVersionNo()),
+                                "SAME_DOCUMENT", null, sameDoc.getVersionNo());
+                    }
+                    if (visibleOther != null) {
+                        throw new DuplicateFileException(
+                                "This file is already registered as %s (v%d). One hard copy should have one DTS number."
+                                        .formatted(visibleOther.getDocument().getReferenceNo(), visibleOther.getVersionNo()),
+                                "OTHER_DOCUMENT", visibleOther.getDocument().getReferenceNo(), visibleOther.getVersionNo());
+                    }
+                    // Never reveal documents the user can't open.
+                    throw new DuplicateFileException(
+                            "This file is already registered under another document you can't open. "
+                                    + "Contact Records before continuing.",
+                            "OTHER_DOCUMENT", null, null);
+                }
             }
-        });
 
-        int versionNo = versionRepository.maxVersionNo(doc.getDocumentId()) + 1;
-        VersionKind actualKind = kind != null ? kind
-                : (versionNo == 1 ? VersionKind.ORIGINAL : VersionKind.REVISION);
+            FileStorageService.StoredFile stored =
+                    storage.commit(staged, matches.isEmpty() ? null : matches.get(0).getStoragePath());
 
-        DocumentVersion version = versionRepository.save(DocumentVersion.builder()
-                .document(doc)
-                .versionNo(versionNo)
-                .kind(actualKind)
-                .fileName(fileName)
-                .contentType(contentType)
-                .storagePath(stored.relativePath())
-                .sha256(stored.sha256())
-                .sizeBytes(stored.size())
-                .uploadedBy(user)
-                .build());
+            // If the transaction rolls back, remove a file we just wrote. Never remove a shared one.
+            if (!stored.reused()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCompletion(int status) {
+                        if (status != STATUS_COMMITTED) storage.deleteQuietly(stored.relativePath());
+                    }
+                });
+            }
 
-        doc.setUpdatedAt(LocalDateTime.now());
-        auditService.log(AuditAction.VERSION_UPLOADED, "DOCUMENT", doc.getDocumentId(),
-                "%s v%d (%s) %s sha256=%s".formatted(doc.getReferenceNo(), versionNo, actualKind, fileName, stored.sha256()));
-        return version;
+            int versionNo = versionRepository.maxVersionNo(doc.getDocumentId()) + 1;
+            VersionKind actualKind = kind != null ? kind
+                    : (versionNo == 1 ? VersionKind.ORIGINAL : VersionKind.REVISION);
+
+            DocumentVersion version = versionRepository.save(DocumentVersion.builder()
+                    .document(doc)
+                    .versionNo(versionNo)
+                    .kind(actualKind)
+                    .fileName(fileName)
+                    .contentType(contentType)
+                    .storagePath(stored.relativePath())
+                    .sha256(staged.sha256())
+                    .sizeBytes(staged.size())
+                    .uploadedBy(user)
+                    .build());
+
+            doc.setUpdatedAt(LocalDateTime.now());
+            auditService.log(AuditAction.VERSION_UPLOADED, "DOCUMENT", doc.getDocumentId(),
+                    "%s v%d (%s) %s sha256=%s%s".formatted(doc.getReferenceNo(), versionNo, actualKind, fileName,
+                            staged.sha256(), duplicateOf != null ? " DUPLICATE of " + duplicateOf : ""));
+            return version;
+        } catch (RuntimeException e) {
+            storage.discard(staged);   // no-op if the temp file was already moved
+            throw e;
+        }
     }
 
     @Transactional

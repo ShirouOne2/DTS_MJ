@@ -1,5 +1,6 @@
 package com.philpost.dts.website.service;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,10 +15,12 @@ import com.philpost.dts.website.dto.DocumentSummaryDto;
 import com.philpost.dts.website.dto.DocumentTypeDto;
 import com.philpost.dts.website.dto.PageResponse;
 import com.philpost.dts.website.dto.VersionDto;
+import com.philpost.dts.website.entity.ActionCode;
 import com.philpost.dts.website.entity.AuditAction;
 import com.philpost.dts.website.entity.Document;
 import com.philpost.dts.website.entity.DocumentStatus;
 import com.philpost.dts.website.entity.DocumentType;
+import com.philpost.dts.website.entity.DocumentVersion;
 import com.philpost.dts.website.entity.StepStatus;
 import com.philpost.dts.website.entity.User;
 import com.philpost.dts.website.dto.RouteDto;
@@ -68,9 +71,10 @@ public class DocumentService {
     public PageResponse<DocumentSummaryDto> list(String search, DocumentStatus status, int page, int size) {
         User user = currentUserService.get();
         Page<Document> result = documentRepository.search(
-        access.seesAll(user), user.getDepartment().getDepartmentId(), status,
+        access.seesAll(user),
+        user.getDepartment().getDepartmentId(),
+        status,
         search == null || search.isBlank() ? null : search.trim(),
-        StepStatus.WAITING,
         PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100)));
         return new PageResponse<>(result.getContent().stream().map(this::toSummary).toList(),
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
@@ -143,7 +147,7 @@ public class DocumentService {
                 d.getCreatedBy().getFirstName() + " " + d.getCreatedBy().getLastName(),
                 d.getOriginDepartment().getName(), d.getCreatedAt(), d.getUpdatedAt());
     }
-    private List<String> allowedActions(Document doc, User user, boolean readyToSubmit) {
+    private List<String> allowedActions(Document doc, User user, boolean readyToSubmit, boolean canRecall) {
         List<String> actions = new ArrayList<>();
         if (access.canEdit(doc, user)) {
             actions.add("EDIT");
@@ -151,26 +155,28 @@ public class DocumentService {
             if (readyToSubmit) actions.add("SUBMIT");
         }
         if (access.isCreator(doc, user) && doc.getStatus() == DocumentStatus.DRAFT) actions.add("CANCEL");
+        if (canRecall) actions.add("RECALL");
         return actions;
     }
 
     public DocumentDetailDto toDetail(Document d, User user) {
         List<VersionDto> versions = versionRepository.findByDocumentIdWithUploader(d.getDocumentId())
                 .stream().map(VersionDto::from).toList();
-        List<RouteDto> routes = routeRepository.findByDocumentIdWithDetails(d.getDocumentId())
-                .stream().map(r -> toRouteDto(r, user)).toList();
+        List<Route> rounds = routeRepository.findByDocumentIdWithDetails(d.getDocumentId());
+        List<RouteDto> routes = rounds.stream().map(r -> toRouteDto(r, user)).toList();
 
         // After a rejection, the same file can't be resubmitted: a corrected version is required.
         boolean sameFileAsLastRound = d.getStatus() == DocumentStatus.FOR_REVISION
                 && !versions.isEmpty() && !routes.isEmpty()
                 && routes.get(0).versionNo() == versions.get(0).versionNo();
         boolean readyToSubmit = !versions.isEmpty() && !sameFileAsLastRound;
+        boolean canRecall = access.canRecall(d, user, rounds.isEmpty() ? null : rounds.get(0));
 
         return new DocumentDetailDto(d.getDocumentId(), d.getReferenceNo(), d.getTitle(),
                 d.getDocumentType().getDocumentTypeId(), d.getDocumentType().getName(), d.getRemarks(),
                 d.getStatus().name(), d.getOriginDepartment().getDepartmentId(), d.getOriginDepartment().getName(),
                 fullName(d.getCreatedBy()), d.getCreatedBy().getUsername(), d.getCreatedAt(), d.getUpdatedAt(),
-                allowedActions(d, user, readyToSubmit), versions, routes);
+                allowedActions(d, user, readyToSubmit, canRecall), versions, routes);
     }
 
     private RouteDto toRouteDto(Route r, User user) {
@@ -180,14 +186,20 @@ public class DocumentService {
     }
 
     private StepDto toStepDto(RouteStep s, User user) {
+        ActionCode c = s.getActionCode();
+        boolean overdue = s.getStatus() == StepStatus.ACTIVE && s.getDueDate() != null
+                && s.getDueDate().isBefore(LocalDate.now());
+        DocumentVersion result = s.getResultVersion();
         return new StepDto(s.getStepId(), s.getStepOrder(), s.getDepartment().getDepartmentId(),
-                s.getDepartment().getName(), s.getActionCode().getCode(), s.getActionCode().getLabel(),
-                s.getActionCode().isRequiresSignature(), s.getInstruction(), s.getDueDate(),
-                s.getStatus().name(), s.getDecision() != null ? s.getDecision().name() : null,
+                s.getDepartment().getName(), c.getCode(), c.getLabel(), c.isRequiresSignature(),
+                c.getFileRule().name(), c.getFileKind() != null ? c.getFileKind().name() : null,
+                s.getInstruction(), s.getDueDate(), s.getStatus().name(),
+                s.getDecision() != null ? s.getDecision().name() : null,
                 s.getActivatedAt(), fullName(s.getReceivedBy()), s.getReceivedAt(),
                 fullName(s.getDecidedBy()), s.getDecidedAt(), s.getDecisionRemarks(),
-                s.getSignedVersion() != null ? s.getSignedVersion().getVersionNo() : null,
-                access.stepActions(s, user));
+                result != null ? result.getVersionNo() : null,
+                result != null ? result.getKind().name() : null,
+                access.stepActions(s, user), overdue);
     }
 
     private String fullName(User u) {

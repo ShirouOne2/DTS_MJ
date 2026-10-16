@@ -61,7 +61,14 @@
                     <option value="" disabled>Action...</option>
                     <option v-for="c in actionOptions" :key="c.code" :value="c.code">{{ c.code }} - {{ c.label }}</option>
                   </select>
-                  <input v-model="step.instruction" type="text" maxlength="500" placeholder="Instruction (optional)" :class="[inputClass, 'sm:col-span-2']" />
+                  <input
+                    v-model="step.instruction"
+                    type="text"
+                    maxlength="500"
+                    :placeholder="codeOf(step)?.instructionRequired ? 'Instruction (required)' : 'Instruction (optional)'"
+                    :class="[inputClass, 'sm:col-span-2']"
+                    />
+                    <p v-if="fileHint(step)" class="text-xs text-gray-400 sm:col-span-2">{{ fileHint(step) }}</p>
                   <div class="sm:col-span-2">
                     <label class="text-xs text-gray-400">Due date (optional)</label>
                     <input v-model="step.dueDate" type="date" :min="today" :class="inputClass" />
@@ -169,9 +176,12 @@ const steps = ref([newStep()])
 const actionOptions = computed(() => actionCodes.value.filter((c) => !c.advisory))
 const otherDepartments = computed(() => departments.value.filter((d) => d.id !== auth.user?.departmentId))
 
+const codeOf = (step) => actionCodes.value.find((c) => c.code === step.actionCode)
+
 const canSubmit = computed(() => {
   if (routeType.value === 'ADVISORY') return advisoryDepartments.value.length > 0
-  return steps.value.length > 0 && steps.value.every((s) => s.departmentId && s.actionCode)
+  return steps.value.length > 0 && steps.value.every(
+    (s) => s.departmentId && s.actionCode && (!codeOf(s)?.instructionRequired || s.instruction.trim()))
 })
 
 const deptName = (id) => departments.value.find((d) => d.id === id)?.name
@@ -185,6 +195,15 @@ const flowSummary = computed(() => {
   const names = steps.value.map((s) => deptName(s.departmentId)).filter(Boolean)
   return names.length ? `${origin} \u2192 ${names.join(' \u2192 ')} \u2192 back to ${origin}` : ''
 })
+
+function fileHint(step) {
+  const c = codeOf(step)
+  if (!c || c.fileRule === 'NONE') return ''
+  const what = { SIGNED: 'a signed copy', EDITED: 'an edited file', DRAFT_REPLY: 'a draft reply', ATTACHMENT: 'a file' }[c.fileKind] || 'a file'
+  return c.fileRule === 'REQUIRED'
+    ? `The department must upload ${what}.`
+    : `The department may upload ${what}, which becomes the latest version.`
+}
 
 function addStep() {
   steps.value.push(newStep())
